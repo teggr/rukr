@@ -19,6 +19,7 @@ import java.util.concurrent.Callable;
         description = "Maven project code generator",
         subcommands = {
                 InitCommand.class,
+                AvailableCommand.class,
         }
 )
 public class rukr {
@@ -38,47 +39,76 @@ public class rukr {
 )
 class InitCommand implements Callable<Integer> {
 
-    @CommandLine.Option(names = {"wd", "working-dir"})
-    File wd;
+    @Override
+    public Integer call() throws Exception {
+
+        RukrEnvironment environment =  RukrEnvironment.load();
+        environment.initialise();
+        return 0;
+
+    }
+
+}
+
+@CommandLine.Command(
+        name = "available",
+        description = "List available actions"
+)
+class AvailableCommand implements Callable<Integer> {
 
     @Override
     public Integer call() throws Exception {
 
-        File userHome = new File(System.getProperty("user.home"));
+        RukrEnvironment environment =  RukrEnvironment.load();
+        environment.checkInitialised();
+        System.out.println("Available actions: TBC");
+        return 0;
 
-        System.out.println("User home: " + userHome.getAbsolutePath());
+    }
 
-        File rukrHome = new File(userHome, ".rukr/");
-        if (!rukrHome.exists()) {
-            System.out.println("Rukr home not found");
-            if (!rukrHome.mkdirs()) {
-                System.err.println("Failed to create Rukr home");
-                throw new RuntimeException("Failed to create Rukr home");
-            } else {
-                System.out.println("Rukr home created");
-            }
-        } else {
-            System.out.println("Rukr home already exists");
-        }
+}
 
-        if (wd == null) {
-            System.out.println("Using default working directory");
-            wd = new File("").getAbsoluteFile();
-        }
+class RukrEnvironment {
+
+    public static RukrEnvironment load() {
+
+        File wd = new File("").getAbsoluteFile();
 
         System.out.println("Working directory: " + wd);
 
-        // check for pom.xml
-        File rootPom = new File(wd, "pom.xml");
-        if (!rootPom.exists()) {
-            System.err.println("Cannot find pom.xml. Please run this script at the root of your Maven project. Or set the working directory --working-dir / -wd");
-            throw new RuntimeException("Cannot find pom");
-        } else {
-            System.out.println("Found pom");
+        return new RukrEnvironment(wd);
+
+    }
+
+    private File wd;
+    private File localRukrFolder;
+    private File rukrPropertiesFile;
+    private Properties props = new Properties();
+
+    private RukrEnvironment(File wd) {
+        this.wd = wd;
+        this.localRukrFolder = new File(wd, ".rukr");
+        this.rukrPropertiesFile = new File(localRukrFolder, "rukr.properties");
+    }
+
+    public void checkInitialised() {
+
+        if (!localRukrFolder.exists()) {
+            throw new RuntimeException("rukr has not been initialised. Run the init command first.");
         }
 
+        if (!rukrPropertiesFile.exists()) {
+            throw new RuntimeException("rukr has not been initialised. Run the init command first.");
+        }
+
+    }
+
+    public void initialise() {
+
+        // pre rukr checks
+        checkPom();
+
         // create the local rukr folder
-        File localRukrFolder = new File(wd, ".rukr");
         if (!localRukrFolder.exists()) {
             System.out.println("Local rukr folder .rukr not found");
             boolean newFolder = localRukrFolder.mkdir();
@@ -93,7 +123,6 @@ class InitCommand implements Callable<Integer> {
         }
 
         // create the rukr file
-        File rukrPropertiesFile = new File(localRukrFolder, "rukr.properties");
         if (!rukrPropertiesFile.exists()) {
             System.out.println("rukr properties file not found");
             boolean newFile = false;
@@ -115,7 +144,6 @@ class InitCommand implements Callable<Integer> {
         String version = rukr.VERSION;
 
         // read the rukr file
-        Properties props = new Properties();
         try {
             props.load(new FileInputStream(rukrPropertiesFile));
         } catch (IOException e) {
@@ -134,9 +162,17 @@ class InitCommand implements Callable<Integer> {
         }
 
         System.out.println("Rukr Initialised @ version " + version);
+    }
 
-        return 0;
-
+    private void checkPom() {
+        // check for pom.xml
+        File rootPom = new File(wd, "pom.xml");
+        if (!rootPom.exists()) {
+            System.err.println("Cannot find pom.xml. Please run this script at the root of your Maven project. Or set the working directory --working-dir / -wd");
+            throw new RuntimeException("Cannot find pom");
+        } else {
+            System.out.println("Found pom");
+        }
     }
 
 }
